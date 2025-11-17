@@ -1,0 +1,70 @@
+name: CI/CD (Laravel)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, bcmath, pdo_sqlite
+          coverage: none
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+
+      - name: Install Composer dependencies
+        run: composer install --no-progress --prefer-dist --optimize-autoloader
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          touch database/database.sqlite
+          php artisan migrate --force
+
+      - name: Run tests
+        run: php artisan test --no-coverage
+  build:
+    runs-on: ubuntu-latest
+    needs: tests  # Això fa que el job 'build' depengui del job 'tests'
+
+    steps:
+      - name: Checkout 
+        uses: actions/checkout@v2
+        
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@master
+        with:
+          platforms: all
+           
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+          
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+        
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/tasks-laravel:latest
