@@ -36,6 +36,7 @@ class ChirpController extends Controller
         return redirect(route('chirps.index'));
     }
 
+    
     /**
      * Update the specified resource in storage.
      */
